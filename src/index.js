@@ -1,5 +1,7 @@
 function plugin({ types: t }) {
     /* MyRuleVisitor is the top-level visitor.
+     * All it does is pull out the parameters for the Rule and pass them on
+     * to the BlockVisitor
      */
     const MyRuleVisitor = {
 	FunctionDeclaration(path) {
@@ -15,10 +17,30 @@ function plugin({ types: t }) {
 		callback = params[2].name;
 	    }
 	    const fnParams = { user, context, callback };
-	    console.log(fnParams);
+	    path.traverse(BlockVisitor, fnParams);
 	}
     };
 
+    /* BlockVisitor simply takes a BlockStatement and passes it onto
+     * MainProcessor
+     */
+    const BlockVisitor = {
+	BlockStatement(path) {
+	    path.traverse(MainProcessor, this);
+	}
+    };
+
+    /* MainProcessor is where all the action happens.
+     * TODO: Explain how.
+     */
+    const MainProcessor = {
+	Statement: {
+	    enter(path) {
+		console.log(path.node.type);
+	    }
+	}
+    };
+    
     return {
 	visitor: MyRuleVisitor
     };
