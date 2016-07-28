@@ -17,14 +17,11 @@ function plugin({ types: t }) {
 	// This will be set in MainProcessor's stage 0
 	// TODO: Test with empty block
 	blockNumStatements: undefined,
-	// Top-level Statement nodes that show up _before_ our
-	// relevant `if` condition
-	// This array of nodes is stored so it can later be filtered
-	// to remove anything that isn't needed in the `if` expression
-	setupNodes: [],
 	// All the IfStatements which include "relevant" MemberExpression
 	// (see: context.clientName and context.clientID)
 	ifNodes: [],
+	// An array of all the identifiers that our ifNodes may depend on
+	neededIdentifiers: [],
 	// The following will all be filled in later by MainProcessor
 	// appliesName holds a UID identifier for a variable "applies"
 	appliesName: undefined,
@@ -67,8 +64,71 @@ function plugin({ types: t }) {
 	}
     };
 
+    /* This function will take a `path` (for the BlockStatement)
+     * and it'll look through all sub-objects recursively for
+     * IfStatements.
+     * If the IfStatement's `test` expression depends on
+     * `context.clientName` or `context.clientID` in any way,
+     * the IfStatement is pushed into globalState.ifNodes and
+     * all of its expression's Identifiers are pushed into
+     * globalState.neededIdentifiers
+     */
+    function extractRelevantIfs(path) {
+	
+    }
+
     /* MainProcessor is where all the action happens.
      * TODO: Explain how.
+     * The MainProcessor visitor starts at the first Statement inside
+     * the Rule's BlockStatement (which is inside the FunctionDeclaration)
+     *
+     * Stage 0:
+     * We insert a `let _applies = false;` to
+     * the top of the function. This variable will be used to determine if
+     * the function "applies" to a certain client or not.
+     * We also store the number of root-level statements that the function
+     * will have so that we can determine when we're at the end and need
+     * to insert a `return _applies;` to the end of the function.
+     * We'll also find all the "relevant" IfStatements, i.e.
+     * all the IfStatements which include the MemberExpressions for
+     * `context.clientName` or `context.clientID`
+     * Since we haven't actually processed the first statement at all,
+     * we want to fall through to the next stage (and never come back to
+     * this stage)
+     *
+     * Stage 1:
+     * At this point, we already have the relevantIfStatements
+     * The way we determine if something "applies" to a certain client
+     * is by seeing if it runs any special code for that client.
+     * All code common to all rules is pointless in helping us determine this.
+     * "Special code" is a bit problematic.
+     * The easiest way to think of it is:
+     * If there is a relevant IfStatement, and the only code in it is
+     * "default code", i.e. `return callback(null, user, context);`
+     * then that IfStatement is _not_ special code. Anything _after_
+     * that IfStatement _is_ special code.
+     * I'll refer to this condition as "exclusive" rules, because
+     * when the if conditions are successful, rules are excluded.
+     *
+     * When a relevant IfStatement's consequent includes anything that is not
+     * "default code", it's running special code.
+     *
+     * So here's what this stage does. It goes through the relevant
+     * IfStatements and checks its consequents. If the consequent is "default
+     * code", then we replace it with `return false;`
+     * If the consequent is not default code, we replace it with
+     * `_applies = true;`
+     *
+     * Once we're done processing the IfStatements, we'll process all the
+     * remaining Statements. They need to be removed conditionally.
+     * If our IfStatements depend on them, keep them. Else, throw them.
+     *
+     * The key to understanding the solution is that by default
+     * a rule will run for every client. Only conditional structures
+     * can change that.
+     * Therefore, if we pay attention to our IfStatements and what code
+     * runs within them, we can figure out if special treatment is being
+     * given to any clients.
      */
     const MainProcessor = {
 	Statement: {
@@ -112,11 +172,18 @@ function plugin({ types: t }) {
 		    	// We've inserted the appliesInitFalse statement
 		    	// and can move to the next stage and never come back
 		    	g.transformationStage = 1;
-		    	break;
+		    	// break;
 		    case 1:
+		    	// We're at the last statement, so let's
+		    	// add a `return _applies;`
 		    	if (g.processedStatements === g.blockNumStatements) {
 			    path.insertAfter(g.returnApplies);
+			    return;
 			}
+
+		    	// At this point, we want to start replacing useless
+		    	// code.
+		    
 		    	break;
 		}
 	    },
