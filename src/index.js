@@ -17,7 +17,16 @@ function plugin({ types: t }) {
 	setupNodes: [],
 	// All the IfStatements which include "relevant" MemberExpression
 	// (see: context.clientName and context.clientID)
-	ifNodes: []
+	ifNodes: [],
+	// The following will all be filled in later by MainProcessor
+	// appliesName holds a UID identifier for a variable "applies"
+	appliesName: undefined,
+	// appliesFalse holds a VariableDeclaration initializing "applies"
+	// to `false`
+	appliesFalse: undefined,
+	// returnApplies holds a ReturnStatement; basically `return applies;`
+	// but with `applies` being filled in dynamically based on its UID
+	returnApplies: undefined
     };
     
     /* MyRuleVisitor is the top-level visitor.
