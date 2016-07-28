@@ -4,6 +4,8 @@ function plugin({ types: t }) {
     const globalState = {
 	// Depth of statements as illustrated here:
 	// https://github.com/thejameskyle/babel-handbook/blob/master/translations/en/plugin-handbook.md#user-content-toc-asts
+	// Note that this is tracked after we enter a FunctionDeclaration's
+	// BlockStatement, _not_ as soon as the AST is generated
 	depthLevel: 0,
 	// The stage we're at in MainProcessor
 	// (It's basically simulating a finite state machine)
