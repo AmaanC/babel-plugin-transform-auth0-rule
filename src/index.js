@@ -75,7 +75,11 @@ function plugin({ types: t }) {
 	    enter(path) {
 		// Aliasing so it's easier to use
 		let g = globalState;
-		g.processedStatements++;
+		g.depthLevel++;
+		if (g.depthLevel === 1) {
+		    g.processedStatements++;
+		}
+		
 		switch (g.transformationStage) {
 		    case 0:
 		    	g.appliesName = path.scope.generateUidIdentifier('applies');
@@ -86,20 +90,33 @@ function plugin({ types: t }) {
 			    )]
 			);
 		    	g.returnApplies = t.returnStatement(g.appliesName);
-		    	path.insertBefore(g.appliesInitFalse);
+
 		    	// Store how many Statements the FunctionDeclaration's
 		    	// BlockStatement has. Used to insert g.returnApplies
 		    	// at the end of the block
+		    	// NOTE! This needs to be stored _before_ we insert
+		    	// because after we do, the length will change
+		    	// and what we've inserted will be visited after
+		    	// the statements that were already there in the block
+		    	// Also note that this means we can't remove statements
+		    	// either. We can only replace them.
 		    	g.blockNumStatements = path.parentPath.node.body.length;
+		    
+		    	path.insertBefore(g.appliesInitFalse);
 
 		    	// We've inserted the appliesInitFalse statement
 		    	// and can move to the next stage and never come back
 		    	g.transformationStage = 1;
 		    	break;
 		    case 1:
-		    	
+		    	if (g.processedStatements === g.blockNumStatements) {
+			    path.insertAfter(g.returnApplies);
+			}
 		    	break;
 		}
+	    },
+	    exit(path) {
+		globalState.depthLevel--;
 	    }
 	}
     };
