@@ -98,8 +98,8 @@ function plugin({ types: t }) {
 		    	// because after we do, the length will change
 		    	// and what we've inserted will be visited after
 		    	// the statements that were already there in the block
-		    	// Also note that this means we can't remove statements
-		    	// either. We can only replace them.
+		    	// Removing statements after they've been processed,
+		    	// i.e. removing them in _this_ visitor is okay.
 		    	g.blockNumStatements = path.parentPath.node.body.length;
 		    
 		    	path.insertBefore(g.appliesInitFalse);
