@@ -79,7 +79,12 @@ function plugin({ types: t }) {
 		if (g.depthLevel === 1) {
 		    g.processedStatements++;
 		}
-		
+		// If this occurs, we're about to start processing statements
+		// we just inserted. Let's skip that
+		if (g.processedStatements > g.blockNumStatements) {
+		    return;
+		}
+		console.log(path.node.type);
 		switch (g.transformationStage) {
 		    case 0:
 		    	g.appliesName = path.scope.generateUidIdentifier('applies');
