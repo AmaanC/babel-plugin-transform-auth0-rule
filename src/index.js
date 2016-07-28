@@ -10,6 +10,13 @@ function plugin({ types: t }) {
 	// The stage we're at in MainProcessor
 	// (It's basically simulating a finite state machine)
 	transformationStage: 0,
+	// Number of statements we've already processed in MainProcessor
+	// This is needed so we can know when we're at the last Statement so
+	// that we can insert returnApplies (discussed later) right after
+	processedStatements: 0,
+	// This will be set in MainProcessor's stage 0
+	// TODO: Test with empty block
+	blockNumStatements: undefined,
 	// Top-level Statement nodes that show up _before_ our
 	// relevant `if` condition
 	// This array of nodes is stored so it can later be filtered
@@ -21,9 +28,9 @@ function plugin({ types: t }) {
 	// The following will all be filled in later by MainProcessor
 	// appliesName holds a UID identifier for a variable "applies"
 	appliesName: undefined,
-	// appliesFalse holds a VariableDeclaration initializing "applies"
+	// appliesInitFalse holds a VariableDeclaration initializing "applies"
 	// to `false`
-	appliesFalse: undefined,
+	appliesInitFalse: undefined,
 	// returnApplies holds a ReturnStatement; basically `return applies;`
 	// but with `applies` being filled in dynamically based on its UID
 	returnApplies: undefined
@@ -66,7 +73,33 @@ function plugin({ types: t }) {
     const MainProcessor = {
 	Statement: {
 	    enter(path) {
-		console.log(path.node.type);
+		// Aliasing so it's easier to use
+		let g = globalState;
+		g.processedStatements++;
+		switch (g.transformationStage) {
+		    case 0:
+		    	g.appliesName = path.scope.generateUidIdentifier('applies');
+		    	g.appliesInitFalse = t.variableDeclaration(
+			    'let',
+			    [t.variableDeclarator(
+				g.appliesName, t.booleanLiteral(false)
+			    )]
+			);
+		    	g.returnApplies = t.returnStatement(g.appliesName);
+		    	path.insertBefore(g.appliesInitFalse);
+		    	// Store how many Statements the FunctionDeclaration's
+		    	// BlockStatement has. Used to insert g.returnApplies
+		    	// at the end of the block
+		    	g.blockNumStatements = path.parentPath.node.body.length;
+
+		    	// We've inserted the appliesInitFalse statement
+		    	// and can move to the next stage and never come back
+		    	g.transformationStage = 1;
+		    	break;
+		    case 1:
+		    	
+		    	break;
+		}
 	    }
 	}
     };
