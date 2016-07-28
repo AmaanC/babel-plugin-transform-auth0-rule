@@ -1,0 +1,28 @@
+{
+  "name": "babel-plugin-detect-if",
+  "version": "1.0.0",
+  "description": "A plugin to transform code to only leave `if` conditions and its dependencies",
+  "main": "app.js",
+  "dependencies": {
+    "babel-core": "^6.11.4"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.11.4"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmaanC/babel-plugin-detect-if.git"
+  },
+  "keywords": [
+    "babel-plugin"
+  ],
+  "author": "Amaan Cheval",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/AmaanC/babel-plugin-detect-if/issues"
+  },
+  "homepage": "https://github.com/AmaanC/babel-plugin-detect-if#readme"
+}
