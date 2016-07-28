@@ -1,4 +1,23 @@
 function plugin({ types: t }) {
+    /* Variable used to hold state across various visitors
+     */
+    const globalState = {
+	// Depth of statements as illustrated here:
+	// https://github.com/thejameskyle/babel-handbook/blob/master/translations/en/plugin-handbook.md#user-content-toc-asts
+	depthLevel: 0,
+	// The stage we're at in MainProcessor
+	// (It's basically simulating a finite state machine)
+	transformationStage: 0,
+	// Top-level Statement nodes that show up _before_ our
+	// relevant `if` condition
+	// This array of nodes is stored so it can later be filtered
+	// to remove anything that isn't needed in the `if` expression
+	setupNodes: [],
+	// All the IfStatements which include "relevant" MemberExpression
+	// (see: context.clientName and context.clientID)
+	ifNodes: []
+    };
+    
     /* MyRuleVisitor is the top-level visitor.
      * All it does is pull out the parameters for the Rule and pass them on
      * to the BlockVisitor
