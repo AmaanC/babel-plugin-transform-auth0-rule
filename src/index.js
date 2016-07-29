@@ -124,16 +124,18 @@ function plugin({ types: t }) {
      * For now, we're just ignoring that.
      */
     function extractRelevantIfs(obj, params) {
+	let relevantIfs = [];
 	for (let key in obj) {
 	    if (typeof key === 'object') {
 		extractRelevantIfs(obj[key]);
 		if (obj[key].type === 'IfStatement' &&
 		    containsMemberExp(obj[key]), params)
 		{
-		    globalState.ifNodes.push(obj[key]);
+		    relevantIfs.push(obj[key]);
 		}
 	    }
 	}
+	return relevantIfs;
     }
 
     /* MainProcessor is where all the action happens.
