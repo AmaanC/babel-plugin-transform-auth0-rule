@@ -241,7 +241,6 @@ function plugin({ types: t }) {
 		// add a `return _applies;`
 		if (g.processedStatements === g.blockNumStatements) {
 		    path.insertAfter(g.returnApplies);
-		    return;
 		}
 
 		// At this point, we want to start replacing useless
