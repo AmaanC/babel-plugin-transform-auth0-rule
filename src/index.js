@@ -70,7 +70,7 @@ function plugin({ types: t }) {
      * An array of all matching objects is returned.
      * If there are no matches, an empty array is returned.
      */
-    function findObjectWithKeyVal(obj, searchKey, value) {
+    function findObjectsWithKeyVal(obj, searchKey, value) {
 	let matchingObjects = [];
 	if (typeof obj !== 'object' || obj === null) {
 	    return new Error('Could not find ' + searchKey + ', ' + value + ' in ' + obj);
@@ -80,7 +80,7 @@ function plugin({ types: t }) {
 	}
 	for (let curKey in obj) {
 	    if (typeof obj[curKey] === 'object' && obj[curKey] !== null) {
-		matchingObjects = matchingObjects.concat(findObjectWithKeyVal(obj[curKey], searchKey, value));
+		matchingObjects = matchingObjects.concat(findObjectsWithKeyVal(obj[curKey], searchKey, value));
 	    }						
 	}
 	return matchingObjects;
@@ -98,7 +98,7 @@ function plugin({ types: t }) {
 	if (!ifObj || ifObj.type !== 'IfStatement' || !ifObj.test) {
 	    return new Error('Could not find MemberExpression in malformed IfStatement');
 	}
-	const memExps = findObjectWithKeyVal(ifObj.test, 'type', 'MemberExpression');
+	const memExps = findObjectsWithKeyVal(ifObj.test, 'type', 'MemberExpression');
 	for (let curMemExp of memExps) {
 	    if (curMemExp.object.name === params.context &&
 		(curMemExp.property.name === 'clientName' ||
@@ -146,6 +146,26 @@ function plugin({ types: t }) {
 	return relevantIfs;
     }
 
+    /* ifNodes is an array (probably globalState.ifNodes from up top)
+     * This function will extract _all_ identifiers from all of these
+     * IfStatements' `test` expression. All of these identifiers will
+     * be returned in an array
+     * Note: We're extracting _all_ identifiers. This is bad.
+     * TODO: Add examples of edge cases and things that can go wrong.
+     */
+    function extractIdentifiers(ifNodes) {
+	let allIdentifiers = [];
+	for (let curIfNode of ifNodes) {
+	    const curIdentifiers = findObjectsWithKeyVal(
+		curIfNode.test, 'type', 'Identifier'
+	    ).map(function(identifierObj) {
+		return identifierObj.name;
+	    });
+	    allIdentifiers = allIdentifiers.concat(curIdentifiers);
+	}
+	return allIdentifiers;
+    }
+    
     /* MainProcessor is where all the action happens.
      * TODO: Explain how.
      * The MainProcessor visitor starts at the first Statement inside
@@ -213,11 +233,11 @@ function plugin({ types: t }) {
 		if (g.processedStatements > g.blockNumStatements) {
 		    return;
 		}
-		console.log(path.node.type);
 		// The following is all one-time code that runs in stage 0
 		if (g.transformationStage === 0) {
 		    g.ifNodes = extractRelevantIfs(path.parentPath, this);
-		    console.log('Relevant IfNodes:', g.ifNodes);
+		    g.neededIdentifiers = extractIdentifiers(g.ifNodes);
+		    console.log(g.neededIdentifiers);
 		    g.appliesName = path.scope.generateUidIdentifier('applies');
 		    g.appliesInitFalse = t.variableDeclaration(
 			'let',
