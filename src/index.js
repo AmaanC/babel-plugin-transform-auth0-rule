@@ -233,7 +233,11 @@ function plugin({ types: t }) {
 		    // and can move to the next stage and never come back
 		    g.transformationStage = 1;
 		}
-		// We're at the last statement, so let's
+
+		// Stage 1 starts here. We either fell through or came here
+		// directly
+		
+		// First we'll check if we're at the last statement, and if so
 		// add a `return _applies;`
 		if (g.processedStatements === g.blockNumStatements) {
 		    path.insertAfter(g.returnApplies);
