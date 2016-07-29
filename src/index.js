@@ -64,7 +64,53 @@ function plugin({ types: t }) {
 	}
     };
 
-    /* This function will take a `path` (for the BlockStatement)
+    /* The function takes an object, searchKey, and value and recursively
+     * checks child objects for objects containing a searchKey with the matching
+     * value.
+     * An array of all matching objects is returned.
+     * If there are no matches, an empty array is returned.
+     */
+    function findObjectWithKeyVal(obj, searchKey, value) {
+	let matchingObjects = [];
+	if (typeof obj !== 'object') {
+	    return new Error('Could not find', searchKey, val, 'in', obj);
+	}
+	if (obj.hasOwnProperty(searchKey) && obj[searchKey] === value) {
+	    matchingObjects.push(obj);
+	}
+	for (let curKey in obj) {
+	    if (typeof obj[curKey] === 'object') {
+		matchingObjects = matchingObjects.concat(findObjectWithKeyVal(obj[curKey], searchKey, value));
+	    }						
+	}
+	return matchingObjects;
+    }
+    
+    /* This function takes a `path.node` object for an IfStatement
+     * and returns true if the IfStatement's `test` depends on
+     * `context.clientName` or `context.clientID`
+     * Note: This function only checks for MemberExpressions of that
+     * kind.
+     * It won't detect `context['clientName']` for example.
+     * TODO: Consider adding that and reading the `computed` attribute.
+     */
+    function containsMemberExp(ifObj, params) {
+	if (!ifObj || ifObj.type !== 'IfStatement' || !ifObj.test) {
+	    return new Error('Could not find MemberExpression in malformed IfStatement');
+	}
+	const memExps = findObjectWithKeyVal(ifObj.test, 'type', 'MemberExpression');
+	for (let curMemExp of memExps) {
+	    if (curMemExp.object.name === params.context &&
+		(curMemExp.property.name === 'clientName' ||
+		 curMemExp.property.name === 'clientID'))
+	    {
+		return true;
+	    }
+	}
+	return false;
+    }
+
+    /* This function will take a `path.node` object (for the BlockStatement)
      * and it'll look through all sub-objects recursively for
      * IfStatements.
      * If the IfStatement's `test` expression depends on
@@ -72,9 +118,22 @@ function plugin({ types: t }) {
      * the IfStatement is pushed into globalState.ifNodes and
      * all of its expression's Identifiers are pushed into
      * globalState.neededIdentifiers
+     * TODO: Consider dependencies such as:
+     * let c = context;
+     * if (c.clientName === 'foo') { ... }
+     * For now, we're just ignoring that.
      */
-    function extractRelevantIfs(path) {
-	
+    function extractRelevantIfs(obj, params) {
+	for (let key in obj) {
+	    if (typeof key === 'object') {
+		extractRelevantIfs(obj[key]);
+		if (obj[key].type === 'IfStatement' &&
+		    containsMemberExp(obj[key]), params)
+		{
+		    globalState.ifNodes.push(obj[key]);
+		}
+	    }
+	}
     }
 
     /* MainProcessor is where all the action happens.
@@ -145,47 +204,43 @@ function plugin({ types: t }) {
 		    return;
 		}
 		console.log(path.node.type);
-		switch (g.transformationStage) {
-		    case 0:
-		    	g.appliesName = path.scope.generateUidIdentifier('applies');
-		    	g.appliesInitFalse = t.variableDeclaration(
-			    'let',
-			    [t.variableDeclarator(
-				g.appliesName, t.booleanLiteral(false)
-			    )]
-			);
-		    	g.returnApplies = t.returnStatement(g.appliesName);
+		if (g.transformationStage === 0) {
+		    g.appliesName = path.scope.generateUidIdentifier('applies');
+		    g.appliesInitFalse = t.variableDeclaration(
+			'let',
+			[t.variableDeclarator(
+			    g.appliesName, t.booleanLiteral(false)
+			)]
+		    );
+		    g.returnApplies = t.returnStatement(g.appliesName);
 
-		    	// Store how many Statements the FunctionDeclaration's
-		    	// BlockStatement has. Used to insert g.returnApplies
-		    	// at the end of the block
-		    	// NOTE! This needs to be stored _before_ we insert
-		    	// because after we do, the length will change
-		    	// and what we've inserted will be visited after
-		    	// the statements that were already there in the block
-		    	// Removing statements after they've been processed,
-		    	// i.e. removing them in _this_ visitor is okay.
-		    	g.blockNumStatements = path.parentPath.node.body.length;
+		    // Store how many Statements the FunctionDeclaration's
+		    // BlockStatement has. Used to insert g.returnApplies
+		    // at the end of the block
+		    // NOTE! This needs to be stored _before_ we insert
+		    // because after we do, the length will change
+		    // and what we've inserted will be visited after
+		    // the statements that were already there in the block
+		    // Removing statements after they've been processed,
+		    // i.e. removing them in _this_ visitor is okay.
+		    g.blockNumStatements = path.parentPath.node.body.length;
 		    
-		    	path.insertBefore(g.appliesInitFalse);
+		    path.insertBefore(g.appliesInitFalse);
 
-		    	// We've inserted the appliesInitFalse statement
-		    	// and can move to the next stage and never come back
-		    	g.transformationStage = 1;
-		    	// break;
-		    case 1:
-		    	// We're at the last statement, so let's
-		    	// add a `return _applies;`
-		    	if (g.processedStatements === g.blockNumStatements) {
-			    path.insertAfter(g.returnApplies);
-			    return;
-			}
-
-		    	// At this point, we want to start replacing useless
-		    	// code.
-		    
-		    	break;
+		    // We've inserted the appliesInitFalse statement
+		    // and can move to the next stage and never come back
+		    g.transformationStage = 1;
 		}
+		// We're at the last statement, so let's
+		// add a `return _applies;`
+		if (g.processedStatements === g.blockNumStatements) {
+		    path.insertAfter(g.returnApplies);
+		    return;
+		}
+
+		// At this point, we want to start replacing useless
+		// code.
+
 	    },
 	    exit(path) {
 		globalState.depthLevel--;
