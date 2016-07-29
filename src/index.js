@@ -73,13 +73,13 @@ function plugin({ types: t }) {
     function findObjectWithKeyVal(obj, searchKey, value) {
 	let matchingObjects = [];
 	if (typeof obj !== 'object' || obj === null) {
-	    return new Error('Could not find', searchKey, value, 'in', obj);
+	    return new Error('Could not find ' + searchKey + ', ' + value + ' in ' + obj);
 	}
 	if (obj.hasOwnProperty(searchKey) && obj[searchKey] === value) {
 	    matchingObjects.push(obj);
 	}
 	for (let curKey in obj) {
-	    if (typeof obj[curKey] === 'object') {
+	    if (typeof obj[curKey] === 'object' && obj[curKey] !== null) {
 		matchingObjects = matchingObjects.concat(findObjectWithKeyVal(obj[curKey], searchKey, value));
 	    }						
 	}
@@ -136,7 +136,6 @@ function plugin({ types: t }) {
 		// themselves (think parentPath followed by child nodes)
 		obj[key]._visitedToExtract = true;
 		relevantIfs = relevantIfs.concat(extractRelevantIfs(obj[key], params));
-
 		if (obj[key].type === 'IfStatement' &&
 		    containsMemberExp(obj[key], params))
 		{
