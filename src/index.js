@@ -169,6 +169,53 @@ function plugin({ types: t }) {
 	}
 	return allIdentifiers;
     }
+
+    function isDefaultCallback(callExpression, params) {
+	const args = callExpression.arguments;
+	if (t.isCallExpression(callExpression) &&
+	    t.isIdentifier(callExpression.callee) &&
+	    callExpression.callee.name === params.callback &&
+	    t.isNullLiteral(args[0]) &&
+	    t.isIdentifier(args[1]) &&
+	    t.isIdentifier(args[2]) &&
+	    args[1].name === params.user &&
+	    args[2].name === params.context
+	   )
+	{
+	    return true;
+	}
+	return false;
+    }
+
+    /* The function takes a single Statement as input and checks to
+     * see if it counts as a "default" statement
+     * Only the following count as default code:
+     * return callback(null, user, context);
+     * callback(null, user, context);
+     * return Literal;
+     *
+     * Anything apart from those 3 are thought of as non-default
+     * code, i.e. code that indicates that we're actually executing
+     * something for the current rule
+     */
+    function isDefaultCode(statement, params) {
+	if (
+	    (t.isReturnStatement(statement) &&
+	     t.isLiteral(statement.argument)) ||
+
+	    (t.isExpressionStatement(statement) &&
+	     isDefaultCallback(statement.expression, params)) ||
+
+	    (t.isReturnStatement(statement) &&
+	     t.isCallExpression(statement.argument) &&
+	     isDefaultCallback(statement.argument, params))
+	)
+	{
+	    console.log('Default:', statement);
+	    return true;
+	}
+	return false;
+    }
     
     /* MainProcessor is where all the action happens.
      * TODO: Explain how.
@@ -280,7 +327,13 @@ function plugin({ types: t }) {
 
 		// At this point, we want to start replacing useless
 		// code.
+		// Code can only be replaced if both of the following
+		// hold true
+		// 1. The Statement is a "non-default" statement
+		// 2. The Statement includes 0 identifiers that future
+		//    relevant ifNodes may depend on.
 
+		isDefaultCode(path.node, this);
 	    },
 	    exit(path) {
 		globalState.depthLevel--;
