@@ -161,6 +161,10 @@ function plugin({ types: t }) {
 	    ).map(function(identifierObj) {
 		return identifierObj.name;
 	    });
+	    // Concat means that if the same identifiers are present
+	    // in multiple relevant IfStatements, they'll be present
+	    // multiple times. We're fine with that, but it may be
+	    // a consideration for later.
 	    allIdentifiers = allIdentifiers.concat(curIdentifiers);
 	}
 	return allIdentifiers;
