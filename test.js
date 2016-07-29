@@ -2,7 +2,13 @@ function original(user, context, callback) {
     // let _applies = false; inserted here
     const foo = 'a'; // This should be removed
     context.xyz = 'foo'; // This should stay
-    if (context.clientName !== 'Default App'){
+    let a = true;
+    if (context.clientName !== 'Default App' && a === true) {
+	return callback(null, user, context);
+	// Replaced with:
+	// return _applies;
+    }
+    if (context.clientName !== 'XYZ' && a === false) {
 	return callback(null, user, context);
 	// Replaced with:
 	// return _applies;
