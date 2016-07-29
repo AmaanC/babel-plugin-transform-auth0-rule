@@ -72,8 +72,8 @@ function plugin({ types: t }) {
      */
     function findObjectWithKeyVal(obj, searchKey, value) {
 	let matchingObjects = [];
-	if (typeof obj !== 'object') {
-	    return new Error('Could not find', searchKey, val, 'in', obj);
+	if (typeof obj !== 'object' || obj === null) {
+	    return new Error('Could not find', searchKey, value, 'in', obj);
 	}
 	if (obj.hasOwnProperty(searchKey) && obj[searchKey] === value) {
 	    matchingObjects.push(obj);
@@ -126,10 +126,19 @@ function plugin({ types: t }) {
     function extractRelevantIfs(obj, params) {
 	let relevantIfs = [];
 	for (let key in obj) {
-	    if (typeof key === 'object') {
-		extractRelevantIfs(obj[key]);
+	    if (typeof obj[key] === 'object' &&
+		obj[key] !== null &&
+		obj[key]._visitedToExtract !== true &&
+		obj.hasOwnProperty(key) &&
+		obj[key].hasOwnProperty)
+	    {
+		// We need to keep track since these objects can contain
+		// themselves (think parentPath followed by child nodes)
+		obj[key]._visitedToExtract = true;
+		relevantIfs = relevantIfs.concat(extractRelevantIfs(obj[key], params));
+
 		if (obj[key].type === 'IfStatement' &&
-		    containsMemberExp(obj[key]), params)
+		    containsMemberExp(obj[key], params))
 		{
 		    relevantIfs.push(obj[key]);
 		}
@@ -206,7 +215,10 @@ function plugin({ types: t }) {
 		    return;
 		}
 		console.log(path.node.type);
+		// The following is all one-time code that runs in stage 0
 		if (g.transformationStage === 0) {
+		    g.ifNodes = extractRelevantIfs(path.parentPath, this);
+		    console.log('Relevant IfNodes:', g.ifNodes);
 		    g.appliesName = path.scope.generateUidIdentifier('applies');
 		    g.appliesInitFalse = t.variableDeclaration(
 			'let',
