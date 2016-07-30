@@ -1,37 +1,45 @@
 function plugin({ types: t }) {
     /* Variable used to hold state across various visitors
      */
-    const globalState = {
-	// Depth of statements as illustrated here:
-	// https://github.com/thejameskyle/babel-handbook/blob/master/translations/en/plugin-handbook.md#user-content-toc-asts
-	// Note that this is tracked after we enter a FunctionDeclaration's
-	// BlockStatement, _not_ as soon as the AST is generated
-	depthLevel: 0,
-	// The stage we're at in MainProcessor
-	// (It's basically simulating a finite state machine)
-	transformationStage: 0,
-	// Number of statements we've already processed in MainProcessor
-	// This is needed so we can know when we're at the last Statement so
-	// that we can insert returnApplies (discussed later) right after
-	processedStatements: 0,
-	// This will be set in MainProcessor's stage 0
-	// TODO: Test with empty block
-	blockNumStatements: undefined,
-	// All the IfStatements which include "relevant" MemberExpression
-	// (see: context.clientName and context.clientID)
-	ifNodes: [],
-	// The following will all be filled in later by MainProcessor
-	// appliesName holds a UID identifier for a variable "applies"
-	appliesName: undefined,
-	// appliesInitFalse holds a VariableDeclaration initializing "applies"
-	// to `false`
-	appliesInitFalse: undefined,
-	// appliesSetTrue is basically `_applies = true;`
-	appliesSetTrue: undefined,
-	// returnApplies holds a ReturnStatement; basically `return applies;`
-	// but with `applies` being filled in dynamically based on its UID
-	returnApplies: undefined
-    };
+    let globalState;
+
+    /* We initialize the global state in this function because that way
+     * the state is "reset" everytime we use the plugin to transform a different
+     * Rule
+     */
+    function initGlobalState() {
+	globalState = {
+	    // Depth of statements as illustrated here:
+	    // https://github.com/thejameskyle/babel-handbook/blob/master/translations/en/plugin-handbook.md#user-content-toc-asts
+	    // Note that this is tracked after we enter a FunctionDeclaration's
+	    // BlockStatement, _not_ as soon as the AST is generated
+	    depthLevel: 0,
+	    // The stage we're at in MainProcessor
+	    // (It's basically simulating a finite state machine)
+	    transformationStage: 0,
+	    // Number of statements we've already processed in MainProcessor
+	    // This is needed so we can know when we're at the last Statement so
+	    // that we can insert returnApplies (discussed later) right after
+	    processedStatements: 0,
+	    // This will be set in MainProcessor's stage 0
+	    // TODO: Test with empty block
+	    blockNumStatements: undefined,
+	    // All the IfStatements which include "relevant" MemberExpression
+	    // (see: context.clientName and context.clientID)
+	    ifNodes: [],
+	    // The following will all be filled in later by MainProcessor
+	    // appliesName holds a UID identifier for a variable "applies"
+	    appliesName: undefined,
+	    // appliesInitFalse holds a VariableDeclaration initializing "applies"
+	    // to `false`
+	    appliesInitFalse: undefined,
+	    // appliesSetTrue is basically `_applies = true;`
+	    appliesSetTrue: undefined,
+	    // returnApplies holds a ReturnStatement; basically `return applies;`
+	    // but with `applies` being filled in dynamically based on its UID
+	    returnApplies: undefined
+	};
+    }
 
     /* This function is called when we reach either a FunctionDeclaration
      * or a FunctionExpression from MyRuleVisitor. It pulls out the Rule's
@@ -39,6 +47,7 @@ function plugin({ types: t }) {
      */
     function processFunction(path) {
 	let user, context, callback;
+	initGlobalState();
 	const params = path.node.params;
 
 	if (params[0] && params[0].name) {
