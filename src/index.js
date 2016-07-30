@@ -73,12 +73,6 @@ function plugin({ types: t }) {
 	},
 	FunctionExpression: {
 	    enter: processFunction
-	},
-	// In case we're using a function expression for the rule,
-	// the top level of the program will be an ExpressionStatement
-	// using which we can get to the FunctionExpression
-	ExpressionStatement(path) {
-	    path.traverse(MyRuleVisitor);
 	}
     };
 
