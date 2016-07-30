@@ -390,7 +390,6 @@ function plugin({ types: t }) {
 		// If this occurs, we're about to start processing statements
 		// we just inserted. Let's skip that
 		if (g.processedStatements > g.blockNumStatements) {
-		    console.log('Skipping', path.node.type);
 		    return;
 		}
 		// The following is all one-time code that runs in stage 0
