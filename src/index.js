@@ -28,6 +28,8 @@ function plugin({ types: t }) {
 	// appliesInitFalse holds a VariableDeclaration initializing "applies"
 	// to `false`
 	appliesInitFalse: undefined,
+	// appliesSetTrue is basically `_applies = true;`
+	appliesSetTrue: undefined,
 	// returnApplies holds a ReturnStatement; basically `return applies;`
 	// but with `applies` being filled in dynamically based on its UID
 	returnApplies: undefined
@@ -146,27 +148,15 @@ function plugin({ types: t }) {
 	return relevantIfs;
     }
 
-    /* ifNodes is an array (probably globalState.ifNodes from up top)
-     * This function will extract _all_ identifiers from all of these
-     * IfStatements' `test` expression. All of these identifiers will
-     * be returned in an array
-     * Note: We're extracting _all_ identifiers. This is bad.
-     * TODO: Add examples of edge cases and things that can go wrong.
+    /* This function takes a Node as input and returns all child Identifiers
+     * it can find in an array
      */
-    function extractIdentifiers(ifNodes) {
-	let allIdentifiers = [];
-	for (let curIfNode of ifNodes) {
-	    const curIdentifiers = findObjectsWithKeyVal(
-		curIfNode.test, 'type', 'Identifier'
-	    ).map(function(identifierObj) {
-		return identifierObj.name;
-	    });
-	    // Concat means that if the same identifiers are present
-	    // in multiple relevant IfStatements, they'll be present
-	    // multiple times. We're fine with that, but it may be
-	    // a consideration for later.
-	    allIdentifiers = allIdentifiers.concat(curIdentifiers);
-	}
+    function extractIdentifiers(node) {
+	const allIdentifiers = findObjectsWithKeyVal(
+	    node, 'type', 'Identifier'
+	).map(function(identifierObj) {
+	    return identifierObj.name;
+	});
 	return allIdentifiers;
     }
 
@@ -187,6 +177,24 @@ function plugin({ types: t }) {
 	return false;
     }
 
+    /*
+     *
+     */
+    function isDefaultReturn(statement, params) {
+	if (
+	    (t.isReturnStatement(statement) &&
+	     t.isCallExpression(statement.argument) &&
+	     isDefaultCallback(statement.argument, params)) ||
+	    (t.isReturnStatement(statement) &&
+	     t.isLiteral(statement.argument))
+	)
+	{
+	    return true;
+	}
+	return false;
+    }
+    
+    // TODO: Update this
     /* The function takes a single Statement as input and checks to
      * see if it counts as a "default" statement
      * Only the following count as default code:
@@ -199,22 +207,80 @@ function plugin({ types: t }) {
      * something for the current rule
      */
     function isDefaultCode(statement, params) {
-	if (
-	    (t.isReturnStatement(statement) &&
-	     t.isLiteral(statement.argument)) ||
-
-	    (t.isExpressionStatement(statement) &&
-	     isDefaultCallback(statement.expression, params)) ||
-
-	    (t.isReturnStatement(statement) &&
-	     t.isCallExpression(statement.argument) &&
-	     isDefaultCallback(statement.argument, params))
+	if (t.isExpressionStatement(statement) &&
+	     isDefaultCallback(statement.expression, params)
 	)
 	{
-	    console.log('Default:', statement);
 	    return true;
 	}
 	return false;
+    }
+
+    /* This function takes a statement and the Rule's parameter names
+     * as input
+     * It processes the statement to figure out if it can be removed
+     * or replaced and does so, based on the following heuristics:
+     * 1. If the node is not a relevant ifNode &&
+     *    the node is non-default code (more on this later) &&
+     *    no relevant ifNodes further ahead depend on this statement
+     *
+     *    If all hold true, we can rem
+     * We can remove all "default" code. If it is a
+     * `callback(null, user, context)`, it can simply be thrown out.
+     * If it is non-default code, we can throw it out if:
+     * 1. It is not a relevant ifNode
+     * 2. It contains 0 identifiers that ifNodes depend on further ahead
+     * 3.
+     TODO: Update this
+     */
+    function processAndUpdateNode(path, params) {
+	const g = globalState;
+	if (isDefaultCode(path.node, params)) {
+	    path.remove();
+	}
+	else if (isDefaultReturn(path.node, params)) {
+	    path.replaceWith(g.returnApplies);
+	}
+	// If it isn't default code, and it isn't a relevant ifNode
+	// we'll start checking to see if it's a dependency
+	else if (g.ifNodes.indexOf(path.node) === -1) {
+	    const identifiersInNode = extractIdentifiers(path.node);
+	    // The only way the current path.node is considered a
+	    // "dependency" is if:
+	    // 1. It contains common identifiers with some relevant ifNode
+	    // 2. It occurs _before_ that ifNode
+	    // Note: Control statements could screw this up, but we're
+	    // only sticking to simple use cases and will need to make that
+	    // obvious
+	    let isDependency = false;
+	    let isPart1 = true;
+	    for (let curIfNode of g.ifNodes) {
+		let commonIdentifiers = curIfNode._neededIdentifiers.some(function(identifier) {
+		    return identifiersInNode.indexOf(identifier) !== -1;
+		});
+		// TODO: Consider the edge cases. Oh, so many possible
+		// edge cases. :(
+		if (commonIdentifiers && path.node.end < curIfNode.start) {
+		    isDependency = true;
+		}
+		else if (path.node.start > curIfNode.start) {
+		    isPart1 = false;
+		}
+	    }
+	    
+	    // It isn't a dependency, so we can remove it.
+	    if (isDependency === false && path.node.type !== 'BlockStatement') {
+		if (isPart1 === true) {
+		    path.remove();
+		}
+		else {
+		    path.replaceWith(g.appliesSetTrue);
+		}
+	    }
+
+	    
+	    // path.replaceWith(g.appliesSetTrue);
+	}
     }
     
     /* MainProcessor is where all the action happens.
@@ -275,6 +341,12 @@ function plugin({ types: t }) {
 	    enter(path) {
 		// Aliasing so it's easier to use
 		let g = globalState;
+		if (path.node === g.returnApplies ||
+		    path.node === g.appliesSetTrue ||
+		    path.node === g.appliesInitFalse)
+		{
+		    return;
+		}
 		g.depthLevel++;
 		if (g.depthLevel === 1) {
 		    g.processedStatements++;
@@ -282,19 +354,34 @@ function plugin({ types: t }) {
 		// If this occurs, we're about to start processing statements
 		// we just inserted. Let's skip that
 		if (g.processedStatements > g.blockNumStatements) {
+		    console.log('Skipping', path.node.type);
 		    return;
 		}
 		// The following is all one-time code that runs in stage 0
 		if (g.transformationStage === 0) {
 		    g.ifNodes = extractRelevantIfs(path.parentPath, this);
-		    g.neededIdentifiers = extractIdentifiers(g.ifNodes);
-		    console.log(g.neededIdentifiers);
+		    for (let curIfNode of g.ifNodes) {
+			// Let's loop over all the relevant ifNodes and
+			// extract all identifiers in them
+			// Note: neededIdentifiers may have duplicates, and
+			// for now, we're okay with that.
+			// TODO: UPDATE THIS AND REMOVE THE GLOBAL PROP
+			curIfNode._neededIdentifiers = extractIdentifiers(curIfNode.test);
+		    }
+		    
 		    g.appliesName = path.scope.generateUidIdentifier('applies');
 		    g.appliesInitFalse = t.variableDeclaration(
 			'let',
 			[t.variableDeclarator(
 			    g.appliesName, t.booleanLiteral(false)
 			)]
+		    );
+		    g.appliesSetTrue = t.expressionStatement(
+			t.assignmentExpression(
+			    '=',
+			    g.appliesName,
+			    t.booleanLiteral(true)
+			)
 		    );
 		    g.returnApplies = t.returnStatement(g.appliesName);
 
@@ -318,7 +405,7 @@ function plugin({ types: t }) {
 
 		// Stage 1 starts here. We either fell through or came here
 		// directly
-		
+
 		// First we'll check if we're at the last statement, and if so
 		// add a `return _applies;`
 		if (g.processedStatements === g.blockNumStatements) {
@@ -327,16 +414,28 @@ function plugin({ types: t }) {
 
 		// At this point, we want to start replacing useless
 		// code.
-		// Code can only be replaced if both of the following
+		// Code can only be replaced if the following
 		// hold true
 		// 1. The Statement is a "non-default" statement
 		// 2. The Statement includes 0 identifiers that future
 		//    relevant ifNodes may depend on.
-
-		isDefaultCode(path.node, this);
+		// 3. The Statement is not a relevant IfNode
+		// TODO: Update this
 	    },
 	    exit(path) {
-		globalState.depthLevel--;
+		const g = globalState;
+		if (path.node === g.returnApplies ||
+		    path.node === g.appliesSetTrue ||
+		    path.node === g.appliesInitFalse)
+		{
+		    return;
+		}
+		g.depthLevel--;
+		if (g.processedStatements > g.blockNumStatements) {
+		    return;
+		}
+		processAndUpdateNode(path, this);
+
 	    }
 	}
     };
