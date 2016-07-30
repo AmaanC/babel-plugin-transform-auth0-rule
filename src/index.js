@@ -20,8 +20,6 @@ function plugin({ types: t }) {
 	// All the IfStatements which include "relevant" MemberExpression
 	// (see: context.clientName and context.clientID)
 	ifNodes: [],
-	// An array of all the identifiers that our ifNodes may depend on
-	neededIdentifiers: [],
 	// The following will all be filled in later by MainProcessor
 	// appliesName holds a UID identifier for a variable "applies"
 	appliesName: undefined,
@@ -177,8 +175,14 @@ function plugin({ types: t }) {
 	return false;
     }
 
-    /*
-     *
+    /* Takes a statement as input with the Rule's parameters object as
+     * input and it tries to figure out if the statement is a
+     * ReturnStatement of the following form:
+     * return AnyLiteralValue;
+     * return callback(null, user, context);
+     * The reason we do this is because both of those statements are
+     * basically "pointless" in that they don't do anything that might
+     * be "special code" that we need to detect.
      */
     function isDefaultReturn(statement, params) {
 	if (
@@ -194,13 +198,11 @@ function plugin({ types: t }) {
 	return false;
     }
     
-    // TODO: Update this
-    /* The function takes a single Statement as input and checks to
-     * see if it counts as a "default" statement
-     * Only the following count as default code:
-     * return callback(null, user, context);
+    /* The function takes a single statement and the Rule's parameters
+     * object as input and checks to see if
+     * it counts as a "default" statement.
+     * Only the following counts as default code:
      * callback(null, user, context);
-     * return Literal;
      *
      * Anything apart from those 3 are thought of as non-default
      * code, i.e. code that indicates that we're actually executing
@@ -216,22 +218,41 @@ function plugin({ types: t }) {
 	return false;
     }
 
-    /* This function takes a statement and the Rule's parameter names
-     * as input
-     * It processes the statement to figure out if it can be removed
-     * or replaced and does so, based on the following heuristics:
-     * 1. If the node is not a relevant ifNode &&
-     *    the node is non-default code (more on this later) &&
-     *    no relevant ifNodes further ahead depend on this statement
+    /* This function takes a path and the Rule's parameter object as input
+     * and it processes the path.node to determine if it should be:
+     * removed, replaced with `_applies = true;`, or replaced with
+     * `return _applies;`
+     * We do this to transform a Rule's code into code that
+     * we can actually run with spoofed context.clientName's and
+     * context.clientID's and have it simply return to tell us
+     * if any "special code" ran.
+     * To do so, we need to be able to detect "special code" and replace
+     * it with an `_applies = true;`.
      *
-     *    If all hold true, we can rem
-     * We can remove all "default" code. If it is a
-     * `callback(null, user, context)`, it can simply be thrown out.
-     * If it is non-default code, we can throw it out if:
-     * 1. It is not a relevant ifNode
-     * 2. It contains 0 identifiers that ifNodes depend on further ahead
-     * 3.
-     TODO: Update this
+     * It does so using the following rules:
+     * If it's default code, we remove it. (Look at isDefaultCode for
+     * an explanation on what default code is)
+     * If it's a return statement, that seems not to do anything, i.e.
+     * it's simply returning the default callback, or returning a literal,
+     * we can replace it with a `return _applies;`
+     * If it's neither a default return statement, nor a default callback,
+     * we need to consider the code for being special.
+     * Special code is code that will only run under certain circumstances.
+     * Code that's common to all rules and is used to "setup" upcoming
+     * if statements is _not_ special.
+     * function(user, context, callback) {
+     *   const allowedClients = ['XYZ', 'foo', 'bar']; // Setup code
+     *   if (allowedClients.indexOf(context.clientName) !== -1) {
+     *     // _This_ is special code
+     *   }
+     * So for something to be special code, it needs to:
+     * - Not be default code
+     * - Not be setup code
+     * The way we determine if something is setup code is basically
+     * by determining if the code happens before a relevant ifNode
+     * If this setup code is a dependency for a future ifNode,
+     * we leave it as it is. If nothing depends on it, we throw it
+     * away.
      */
     function processAndUpdateNode(path, params) {
 	const g = globalState;
@@ -253,7 +274,7 @@ function plugin({ types: t }) {
 	    // only sticking to simple use cases and will need to make that
 	    // obvious
 	    let isDependency = false;
-	    let isPart1 = true;
+	    let isSetupCode = true;
 	    for (let curIfNode of g.ifNodes) {
 		let commonIdentifiers = curIfNode._neededIdentifiers.some(function(identifier) {
 		    return identifiersInNode.indexOf(identifier) !== -1;
@@ -264,22 +285,19 @@ function plugin({ types: t }) {
 		    isDependency = true;
 		}
 		else if (path.node.start > curIfNode.start) {
-		    isPart1 = false;
+		    isSetupCode = false;
 		}
 	    }
 	    
 	    // It isn't a dependency, so we can remove it.
 	    if (isDependency === false && path.node.type !== 'BlockStatement') {
-		if (isPart1 === true) {
+		if (isSetupCode === true) {
 		    path.remove();
 		}
 		else {
 		    path.replaceWith(g.appliesSetTrue);
 		}
 	    }
-
-	    
-	    // path.replaceWith(g.appliesSetTrue);
 	}
     }
     
@@ -363,9 +381,10 @@ function plugin({ types: t }) {
 		    for (let curIfNode of g.ifNodes) {
 			// Let's loop over all the relevant ifNodes and
 			// extract all identifiers in them
-			// Note: neededIdentifiers may have duplicates, and
-			// for now, we're okay with that.
-			// TODO: UPDATE THIS AND REMOVE THE GLOBAL PROP
+			// Note: There may be duplicates among the
+			// various _neededIdentifiers and we're perfectly
+			// okay with that as it allows us to determine
+			// dependencies better
 			curIfNode._neededIdentifiers = extractIdentifiers(curIfNode.test);
 		    }
 		    
@@ -411,16 +430,6 @@ function plugin({ types: t }) {
 		if (g.processedStatements === g.blockNumStatements) {
 		    path.insertAfter(g.returnApplies);
 		}
-
-		// At this point, we want to start replacing useless
-		// code.
-		// Code can only be replaced if the following
-		// hold true
-		// 1. The Statement is a "non-default" statement
-		// 2. The Statement includes 0 identifiers that future
-		//    relevant ifNodes may depend on.
-		// 3. The Statement is not a relevant IfNode
-		// TODO: Update this
 	    },
 	    exit(path) {
 		const g = globalState;
