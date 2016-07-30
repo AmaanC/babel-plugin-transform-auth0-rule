@@ -32,26 +32,44 @@ function plugin({ types: t }) {
 	// but with `applies` being filled in dynamically based on its UID
 	returnApplies: undefined
     };
+
+    /* This function is called when we reach either a FunctionDeclaration
+     * or a FunctionExpression from MyRuleVisitor. It pulls out the Rule's
+     * parameters and passes them onto BlockVisitor.
+     */
+    function processFunction(path) {
+	let user, context, callback;
+	const params = path.node.params;
+
+	if (params[0] && params[0].name) {
+	    user = params[0].name;
+	}
+	if (params[1] && params[1].name) {
+	    context = params[1].name;
+	}
+	if (params[2] && params[2].name) {
+	    callback = params[2].name;
+	}
+	
+	path.traverse(BlockVisitor, { user, context, callback });
+    }
     
     /* MyRuleVisitor is the top-level visitor.
      * All it does is pull out the parameters for the Rule and pass them on
      * to the BlockVisitor
      */
     const MyRuleVisitor = {
-	FunctionDeclaration(path) {
-	    const params = path.node.params;
-	    let user, context, callback;
-	    if (params[0] && params[0].name) {
-		user = params[0].name;
-	    }
-	    if (params[1] && params[1].name) {
-		context = params[1].name;
-	    }
-	    if (params[2] && params[2].name) {
-		callback = params[2].name;
-	    }
-	    const fnParams = { user, context, callback };
-	    path.traverse(BlockVisitor, fnParams);
+	FunctionDeclaration: {
+	    enter: processFunction
+	},
+	FunctionExpression: {
+	    enter: processFunction
+	},
+	// In case we're using a function expression for the rule,
+	// the top level of the program will be an ExpressionStatement
+	// using which we can get to the FunctionExpression
+	ExpressionStatement(path) {
+	    path.traverse(MyRuleVisitor);
 	}
     };
 
