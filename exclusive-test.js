@@ -1,4 +1,4 @@
-function original(user, context, callback) {
+(function(user, context, callback) {
     const foo = 'a';
     context.xyz = 'foo';
     let a = true;
@@ -19,4 +19,4 @@ function original(user, context, callback) {
     }
 
     callback(null, user, context);
-}
+})

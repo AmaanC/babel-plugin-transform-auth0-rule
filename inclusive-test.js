@@ -1,4 +1,4 @@
-function original(user, context, callback) {
+(function(user, context, callback) {
 
   if (context.clientName === 'TheAppToCheckAccessTo') {
     var d = new Date().getDay();
@@ -9,4 +9,4 @@ function original(user, context, callback) {
   }
 
   callback(null, user, context);
-}
+})
