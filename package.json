@@ -1,7 +1,7 @@
 {
-  "name": "babel-plugin-detect-if",
+  "name": "babel-plugin-transform-auth0-rule",
   "version": "1.0.0",
-  "description": "A plugin to transform code to only leave `if` conditions and its dependencies",
+  "description": "A plugin to transform Auth0 Rules to only leave `if` conditions and its dependencies",
   "main": "app.js",
   "dependencies": {
     "babel-core": "^6.11.4"
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AmaanC/babel-plugin-detect-if.git"
+    "url": "git+https://github.com/AmaanC/babel-plugin-transform-auth0-rule.git"
   },
   "keywords": [
     "babel-plugin"
@@ -22,7 +22,7 @@
   "author": "Amaan Cheval",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/AmaanC/babel-plugin-detect-if/issues"
+    "url": "https://github.com/AmaanC/babel-plugin-transform-auth0-rule/issues"
   },
-  "homepage": "https://github.com/AmaanC/babel-plugin-detect-if#readme"
+  "homepage": "https://github.com/AmaanC/babel-plugin-transform-auth0-rule#readme"
 }
