@@ -210,8 +210,8 @@ function plugin({ types: t }) {
 	    (t.isReturnStatement(statement) &&
 	     t.isCallExpression(statement.argument) &&
 	     isDefaultCallback(statement.argument, params)) ||
-	    (t.isReturnStatement(statement) &&
-	     t.isLiteral(statement.argument))
+	        (t.isReturnStatement(statement) &&
+	         t.isLiteral(statement.argument))
 	)
 	{
 	    return true;
@@ -231,8 +231,8 @@ function plugin({ types: t }) {
      */
     function isDefaultCode(statement, params) {
 	if (t.isExpressionStatement(statement) &&
-	     isDefaultCallback(statement.expression, params)
-	)
+	    isDefaultCallback(statement.expression, params)
+	   )
 	{
 	    return true;
 	}
@@ -295,7 +295,7 @@ function plugin({ types: t }) {
 	    // only sticking to simple use cases and will need to make that
 	    // obvious
 	    let isDependency = false;
-	    let isSetupCode = true;
+	    let isSetupCode = g.ifNodes.length > 0 ? true : false;
 	    for (let curIfNode of g.ifNodes) {
 		let commonIdentifiers = curIfNode._neededIdentifiers.some(function(identifier) {
 		    return identifiersInNode.indexOf(identifier) !== -1;
