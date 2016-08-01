@@ -2,7 +2,7 @@
   "name": "babel-plugin-transform-auth0-rule",
   "version": "1.0.0",
   "description": "A plugin to transform Auth0 Rules to only leave `if` conditions and its dependencies",
-  "main": "app.js",
+  "main": "src/index.js",
   "dependencies": {
     "babel-core": "^6.11.4"
   },
