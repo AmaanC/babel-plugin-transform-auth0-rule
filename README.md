@@ -15,3 +15,11 @@ Here's a brief description of how it works:
   - Be removed; if it is "setup" code and nothing seems to depend on it, or if it is a simple `return {Literal};` or `{callback}(null, {user}, {context});`
   - Be replaced by `_applies = true;`; if it is determined to be none of the above. This means that it is "special code"
 5. When we reach the last element being traversed, we insert `return _applies;` after it.
+
+# In action
+
+Make sure you have `babel-cli` installed first (`npm i -g babel-cli`), and then run:
+
+    babel --plugins ../src/index.js sample-files/inclusive-test.js
+    babel --plugins ../src/index.js sample-files/exclusive-test.js
+    babel --plugins ../src/index.js sample-files/all-test.js
